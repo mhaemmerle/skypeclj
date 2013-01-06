@@ -1,0 +1,15 @@
+/target
+/lib
+/classes
+/checkouts
+/logs
+pom.xml
+mac-x86-skypekit-novideo
+*.der
+*.pem
+*.jar
+*.class
+.lein-deps-sum
+.lein-failures
+.lein-plugins
+.DS_Store
