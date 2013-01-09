@@ -22,7 +22,7 @@
 
 (def hour-minute-formatter (formatters :hour-minute))
 
-(defn initialize-conversations
+(defn init-conversations
   [c]
   (doseq [^Conversation conversation c]
     (let [oid-keyword (keyword (str (.getOid conversation)))

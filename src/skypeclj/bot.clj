@@ -64,7 +64,7 @@
 
 ;; register plugins as commands?
 
-(register-command! :echo (fn [& args] (str (format "'%s'" (clojure.string/join " " args)))))
+(register-command! :echo (fn [& args] (clojure.string/join " " args)))
 (register-command! :crash (fn [& args] (throw (Exception. "don't provoke me!"))))
 
 (defn skype-on-message
