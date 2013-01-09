@@ -3,6 +3,7 @@
 /classes
 /checkouts
 /logs
+.lein-cljsbuild-compiler-0/
 pom.xml
 mac-x86-skypekit-novideo
 *.der

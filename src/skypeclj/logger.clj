@@ -70,12 +70,41 @@
                     (let [hour-min (unparse hour-minute-formatter (from-long timestamp))]
                       [:a {:href (str "#" timestamp) :name timestamp} hour-min])
                     author-display-name message-body
-                    [:br]])])])}))
+                    [:br]])])
+              (javascript-tag "var CLOSURE_NO_DEPS = true;")
+              (include-js "/js/main.js")
+              (javascript-tag "skypeclj_client.core.init()")])}))
+
+(defn- encode-event-data
+  [data]
+  (str (format "data: %s\n\n" (generate-string data))))
+
+;; topics == oid's
+
+(defn register-event-listener
+  [event-channel topic]
+  )
+
+(defn deregister-event-listener
+  [event-channel]
+  )
+
+(defn events-handler
+  [response-channel request]
+  (let [{{:keys [conversation-oid]} :route-params} request
+        _ (log/info "events-handler" conversation-oid)
+        event-channel (channel)]
+    (register-event-listener event-channel nil)
+    (enqueue response-channel
+             {:status 200
+              :headers {"Content-Type" "text/event-stream"}
+              :body (map* encode-event-data event-channel)})))
 
 (def handlers
   (routes
    (GET "/" [] index-handler)
    (GET "/:conversation" [conversation] (index-handler conversation))
+   (GET "/:conversation/events" [conversation] (wrap-aleph-handler events-handler))
    (route/resources "/")
    (route/not-found "Page not found")))
 

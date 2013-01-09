@@ -7,8 +7,16 @@
                  [org.clojure/tools.cli "0.2.1"]
                  [aleph "0.3.0-beta8"]
                  [ring "1.1.1"]
-                 [compojure "1.1.1"]
+                 [compojure "1.1.3"]
                  [camel-snake-kebab "0.1.0-SNAPSHOT"]
                  [me.raynes/conch "0.5.0"]
-                 [clj-time "0.4.4"]]
+                 [clj-time "0.4.4"]
+                 [org.clojure/tools.nrepl "0.2.0-beta9"]]
+  :plugins [[lein-marginalia "0.7.1"]
+            [lein-cljsbuild "0.2.10"]]
+  :cljsbuild {:builds [{:source-path "src-cljs"
+                        :compiler {:output-to "resources/public/js/main.js"
+                                   :optimizations :whitespace
+                                   :pretty-print true}}]}
+  :jvm-opts ["-server"]
   :main skypeclj.core)
