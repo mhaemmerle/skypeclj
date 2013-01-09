@@ -13,11 +13,10 @@
 
 (set! *warn-on-reflection* true)
 
-(def listeners (atom {}))
+(def ^:private listeners (atom {}))
 
 (defn post-text
   [^Conversation conversation message]
-  (log/info "post-text")
   (when (not (nil? conversation))
     (.postText conversation message false)))
 
@@ -41,35 +40,26 @@
   (log/info "open-conversation")
   (let [conversation (.getConversationByParticipants
                       skype (into-array [user]) true false)]
-    ;; TODO obviously remove this
-    (post-text conversation "Helga hier!")
     (doseq [m (.unconsumedMessages (.getLastMessages conversation 0))]
       (log-message m))
     conversation))
 
-(defn log-conversation-lists
+(defn ^:private log-conversation-lists
   [& conversation-lists]
   (doseq [conversations conversation-lists]
-    (do
-      (log/info "printing...")
-      (doseq [^Conversation conversation conversations]
-        (let [key (.getOid conversation)
-              display-name (.getDisplayName conversation)
-              identity (.getIdentity conversation)]
-          (log/info (format "conversation key: %s display-name: %s identity: %s" key display-name identity)))))))
+    (doseq [^Conversation conversation conversations]
+      (let [key (.getOid conversation)
+            display-name (.getDisplayName conversation)
+            identity (.getIdentity conversation)]
+        (log/info (format "id: %s display-name: %s identity: %s" key display-name identity))))))
 
-;; Conversation conversation = skClient.skype.getConversationByParticipants(names.toArray(new String[names.size()]), true, false);
 (defn get-conversation-list
   [^Skype skype]
   (log/info "get-conversation-list")
   (let [conversations (.getConversationList skype Conversation$ListType/ALL_CONVERSATIONS)
-        really-all-conversations (.getConversationList skype Conversation$ListType/REALLY_ALL_CONVERSATIONS)
-        inbox-conversations (.getConversationList skype Conversation$ListType/INBOX_CONVERSATIONS)
-        live-conversations (.getConversationList skype Conversation$ListType/LIVE_CONVERSATIONS)
-        bookmarked-conversations (.getConversationList skype Conversation$ListType/BOOKMARKED_CONVERSATIONS)]
-    ;; (log/info "currently in" (count conversations) "conversation(s)")
-    (log/info (format "c: %s r: %s %s %s %s" conversations really-all-conversations inbox-conversations live-conversations bookmarked-conversations))
-    (log-conversation-lists conversations really-all-conversations inbox-conversations live-conversations bookmarked-conversations)))
+        filtered (filter #(not= "echo123" (.getIdentity ^Conversation %)) conversations)]
+    (log-conversation-lists filtered)
+    filtered))
 
 (defn login
   [^Skype skype username password]
@@ -104,7 +94,7 @@
   (swap! listeners update-in [type] dissoc [method])
   nil)
 
-(defn call
+(defn ^:private call
   [listener method & args]
   (log/info "call" listener method)
   (when-let [f (get-in @listeners [listener method])]
