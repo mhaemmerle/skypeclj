@@ -7,7 +7,7 @@
             Skype$ProxyType Skype$QualityTestType ContactListener ConversationListener
             MessageListener ParticipantListener AccountListener ContactGroupListener
             ContactSearchListener SmsListener TransferListener VideoListener
-            VoicemailListener Account$Status]
+            VoicemailListener Account$Status Conversation$GetLastMessagesResponse]
            [com.skype.ipc ClientConfiguration ConnectionListener]
            java.io.IOException))
 
@@ -35,13 +35,21 @@
   [^Conversation conversation]
   (.getParticipants conversation Conversation$ParticipantFilter/ALL))
 
+;; no need for that here
+;; (doseq [m (.unconsumedMessages (.getLastMessages conversation 0))]
+;;   (log-message m))
+
+(defn get-last-messages
+  [^Skype skype ^Conversation conversation timestamp]
+  (let [^Conversation$GetLastMessagesResponse last-messages
+        (.getLastMessages conversation timestamp)]
+    {:context-messages (.contextMessages last-messages)
+     :unconsumed-messages (.unconsumedMessages last-messages)}))
+
 (defn open-conversation
   [^Skype skype user]
-  (log/info "open-conversation")
   (let [conversation (.getConversationByParticipants
                       skype (into-array [user]) true false)]
-    (doseq [m (.unconsumedMessages (.getLastMessages conversation 0))]
-      (log-message m))
     conversation))
 
 (defn ^:private log-conversation-lists
