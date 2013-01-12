@@ -51,9 +51,10 @@ Have a normal Skype account with credentials ready.
 
 ## Usage
 
-Edit `resources/config.clj` and fill in username, password for the Skype account and the path to the converted key file.
+Edit `resources/config.clj` and fill in Skype username, password and the path to the converted key file. I'am developing under OS X so I'll be using that runtime in the example:
 
 ```
+$ while :; do ./mac-x86-skypekit-novideo; sleep 1; done
 $ lein deps
 $ lein trampoline run
 ```
