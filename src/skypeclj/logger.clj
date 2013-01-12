@@ -73,7 +73,8 @@
 (defn index-handler
   ([request]
      (index-handler request nil))
-  ([request c]
+  ([request conversation-oid]
+     (log/info "index-handler" conversation-oid)
      {:status 200
       :headers {"Content-Type" "text/html; charset=utf-8"}
       :body (html5
