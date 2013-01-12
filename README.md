@@ -48,17 +48,20 @@ $ openssl pkcs8 -topk8 -in my-skype-key.pem -outform DER -out my-skype-key.der -
 Have a normal Skype account with credentials ready.
 
 
-
 ## Usage
 
-Edit `resources/config.clj` and fill in Skype username, password and the path to the converted key file. I'am developing under OS X so I'll be using that runtime in the example:
+The runtime will stop every time you disconnect your client, so running in a loop can save you some time on each development cycle, as it will be restarted once control returns:
 
 ```
 $ while :; do ./mac-x86-skypekit-novideo; sleep 1; done
+```
+
+Edit `resources/config.clj` and fill in Skype username, password and the path to the converted key file.
+
+```
 $ lein deps
 $ lein trampoline run
 ```
-
 
 
 ## License
