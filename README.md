@@ -2,6 +2,8 @@
 
 A simple Clojure wrapper for the Skype Java API
 
+Note: The wrapper is currently conflated with a bot/logger and will be spun out eventually to a standalong project so you can have the wrapper without any of the other potentially unnecessary stuff.
+
 ## Requirements
 
 This [guide](http://dow.ngra.de/2012/01/06/skype-bot-for-fun-and-profit-part-i-getting-started) by Toomas Römer will get you started.
