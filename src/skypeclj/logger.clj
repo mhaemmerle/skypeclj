@@ -12,55 +12,107 @@
             [hiccup.util :refer [escape-html]]
             [ring.util.response :as resp]
             [clj-time.format :refer [formatters unparse]]
-            [clj-time.coerce :refer [from-long]]
+            [clj-time.coerce :refer [from-long to-long]]
+            [clj-time.core :refer [now]]
             [cemerick.friend :as friend]
             [cemerick.friend.openid :as openid])
-  (:import [com.skype.api Conversation Message]))
+  (:import [com.skype.api Conversation Message]
+           it.sauronsoftware.cron4j.Scheduler))
 
 (set! *warn-on-reflection* true)
 
 (def aleph-stop (atom nil))
 (def conversations (atom {}))
 
+(def skype-logs-dir (clojure.java.io/file "skype-logs"))
+
 (def stylesheet "http://thomasf.github.com/solarized-css/solarized-dark.min.css")
 ;; (def stylesheet "http://thomasf.github.com/solarized-css/solarized-light.min.css")
 
-(def hour-minute-formatter (formatters :hour-minute))
+(defn rotate-logs
+  []
+  (log/info "rotate-logs"))
 
+(defn start-logrotate-scheduler
+  []
+  (log/info "start-logrotate-scheduler")
+  (doto (Scheduler.)
+    (.schedule "*/1 * * * *" rotate-logs)
+    (.start)))
+
+;; (start-logrotate-scheduler)
+
+;; TODO implement
+(defn ^:private write-to-disk
+  [conversation date filename]
+  (log/info "write-to-disk" conversation date filename))
+
+;; TODO implement
+(defn ^:private load-from-disk
+  [conversation date filename]
+  (log/info "load-from-disk" conversation date filename))
+
+(defn timestamp-to-date
+  [timestamp]
+  (unparse (formatters :date) (from-long (* timestamp 1000))))
+
+;; should ignore messages, that are not from today
+;; and restore them later on
 (defn log-message
   [^Conversation conversation ^Message message]
   (let [oid-keyword (keyword (str (.getOid conversation)))
         display-name (.getDisplayName conversation)
         identity (.getIdentity conversation)
+        timestamp (.getTimestamp message)
+        ;; date-key (keyword (timestamp-to-date timestamp))
         tagged-message {:author (.getAuthor message)
                         :author-display-name (.getAuthorDisplayName message)
-                        :timestamp (* 1000 (.getTimestamp message))
+                        :timestamp timestamp
                         :message-body (.getBodyXml message)}]
     (swap! conversations update-in [oid-keyword :messages] conj tagged-message))
   nil)
 
+(defn ^:private log-unconsumed-messages
+  [^Conversation conversation]
+  (log/info "log-unconsumed-messages")
+  (let [timestamp 1357767070
+        last-messages (.getLastMessages conversation timestamp)
+        context-messages (.contextMessages last-messages)
+        unconsumed-messages (.unconsumedMessages last-messages)]
+    (log/info "context-messages" (count context-messages)
+              "unconsumed-messages" (count unconsumed-messages))
+    (doseq [message unconsumed-messages]
+      (log-message conversation message))))
+
+(defn list-logs
+  [dir]
+  (doseq [^java.io.File f (filter #(not (.isDirectory ^java.io.File %)) (file-seq dir))]
+    (log/info "list-logs" (.getName f))))
+
+(list-logs skype-logs-dir)
+
+;; TODO check local conversation files
+;; does directory exist?
+;; get files in directory
 (defn init-conversations
   [c]
   (doseq [^Conversation conversation c]
     (let [oid-keyword (keyword (str (.getOid conversation)))
           display-name (.getDisplayName conversation)
           identity (.getIdentity conversation)
-          data {:display-name display-name :identity identity :messages []}]
+          data {:display-name display-name :identity identity :messages []}
+          unconsumed-msg-count (.getUnconsumedNormalMessages conversation)
+          now-in-seconds (/ (to-long (now)) 1000)]
+      (log/info "conversation" data)
       (swap! conversations assoc oid-keyword data)
-
-      (log/info "getUnconsumedNormalMessages" (.getUnconsumedNormalMessages conversation) "for" oid-keyword)
-      (let [last-messages (.getLastMessages conversation 1357767070)
-            context-messages (.contextMessages last-messages)
-            unconsumed-messages (.unconsumedMessages last-messages)]
-        (log/info "context-messages" (count context-messages) "unconsumed-messages" (count unconsumed-messages))
-        (doseq [message context-messages]
-          ;; should mark message as read
-          (log-message conversation message))
-        (doseq [message unconsumed-messages]
-          ;; should mark message as read
-          (log-message conversation message)))
-
-      )))
+      (log/info "unconsumed-message-count" unconsumed-msg-count "for" oid-keyword)
+      (log/info "consumption-horizon" (.getConsumptionHorizon conversation))
+      ;; set horizon to zero to mark all messages as unconsumed
+      (.setConsumedHorizon conversation 0 true)
+      (when (> unconsumed-msg-count 0)
+        (log-unconsumed-messages conversation)
+        ;; (.setConsumedHorizon conversation now-in-seconds false)
+        ))))
 
 (defn wrap-bounce-favicon [handler]
   (fn [req]
@@ -87,7 +139,8 @@
                  (for [{:keys [author author-display-name
                                timestamp message-body]} (:messages data)]
                    [:div {:class "info"}
-                    (let [hour-min (unparse hour-minute-formatter (from-long timestamp))]
+                    (let [date-time (from-long (* 1000 timestamp))
+                          hour-min (unparse (formatters :hour-minute) date-time)]
                       [:a {:href (str "#" timestamp) :name timestamp} hour-min])
                     (escape-html (str "<" author-display-name ">")) message-body
                     [:br]])])

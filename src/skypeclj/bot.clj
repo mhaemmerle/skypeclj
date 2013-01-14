@@ -24,6 +24,10 @@
     (log/info "We're logged in!")
     (logger/init-conversations (skype/get-conversation-list *skype*))))
 
+(defn message-on-property-change
+  [message property value string-value]
+  (log/info "message-on-property-change" property value))
+
 (defn register-command!
   [cmd fun]
   (swap! commands assoc cmd fun))
@@ -69,9 +73,16 @@
 
 (defn skype-on-message
   [skype message changes-inbox-timestamp supersedes-history-message conversation]
-  (log/info "skype-on-message" message (.getTimestamp message))
+  (log/info "skype-on-message" message (.getTimestamp message) changes-inbox-timestamp
+            supersedes-history-message)
   (logger/log-message conversation message)
   (parse-message conversation message))
+
+(defn register-bot-listeners
+  []
+  (skype/add-listener! :account-listener :on-property-change account-on-property-change)
+  (skype/add-listener! :skype-listener :on-message skype-on-message)
+  (skype/add-listener! :message-listener :on-property-change message-on-property-change))
 
 (defn stop
   []
@@ -79,8 +90,7 @@
 
 (defn start
   [runtime-host runtime-port username password key]
-  (skype/add-listener! :account-listener :on-property-change account-on-property-change)
-  (skype/add-listener! :skype-listener :on-message skype-on-message)
+  (register-bot-listeners)
   (let [skype (skype/start key runtime-host runtime-port)
         account (skype/login skype username password)]
     (alter-var-root #'*skype* (constantly skype))
