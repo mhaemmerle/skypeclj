@@ -14,7 +14,7 @@
                  [me.raynes/conch "0.5.0"]
                  [clj-time "0.4.4"]
                  [org.clojure/tools.nrepl "0.2.0-RC2"]
-                 [com.cemerick/friend "0.1.2"]
+                 [com.cemerick/friend "0.1.3"]
                  [org.clojars.gmazelier/cron4j "2.2.5"]]
   :dev-dependencies [[lein-checkouts "1.0.0"]]
   :plugins [[lein-marginalia "0.7.1"]
