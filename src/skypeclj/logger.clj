@@ -4,12 +4,13 @@
         [aleph http formats]
         [cheshire.core :only [generate-string parse-string]]
         compojure.core
-        [ring.middleware params keyword-params nested-params session])
+        [ring.middleware params keyword-params nested-params session reload])
   (:require [clojure.tools.logging :as log]
             [compojure.route :as route]
             [hiccup.page :refer [html5 include-js include-css]]
             [hiccup.element :refer [javascript-tag]]
             [hiccup.util :refer [escape-html]]
+            [hiccup.def :refer [defelem]]
             [ring.util.response :as resp]
             [clj-time.format :refer [formatters unparse]]
             [clj-time.coerce :refer [from-long to-long]]
@@ -21,13 +22,10 @@
 
 (set! *warn-on-reflection* true)
 
-(def aleph-stop (atom nil))
-(def conversations (atom {}))
+(defonce aleph-stop (atom nil))
+(defonce conversations (atom {}))
 
 (def skype-logs-dir (clojure.java.io/file "skype-logs"))
-
-(def stylesheet "http://thomasf.github.com/solarized-css/solarized-dark.min.css")
-;; (def stylesheet "http://thomasf.github.com/solarized-css/solarized-light.min.css")
 
 (defn rotate-logs
   []
@@ -89,7 +87,7 @@
   (doseq [^java.io.File f (filter #(not (.isDirectory ^java.io.File %)) (file-seq dir))]
     (log/info "list-logs" (.getName f))))
 
-(list-logs skype-logs-dir)
+;; (list-logs skype-logs-dir)
 
 ;; TODO check local conversation files
 ;; does directory exist?
@@ -97,10 +95,11 @@
 (defn init-conversations
   [c]
   (doseq [^Conversation conversation c]
-    (let [oid-keyword (keyword (str (.getOid conversation)))
+    (let [oid (str (.getOid conversation))
+          oid-keyword (keyword oid)
           display-name (.getDisplayName conversation)
           identity (.getIdentity conversation)
-          data {:display-name display-name :identity identity :messages []}
+          data {:display-name display-name :identity identity :messages [] :oid oid}
           unconsumed-msg-count (.getUnconsumedNormalMessages conversation)
           now-in-seconds (/ (to-long (now)) 1000)]
       (log/info "conversation" data)
@@ -122,28 +121,39 @@
        :body "Page not found"}
       (handler req))))
 
+(defelem time-link
+  [timestamp hour-min]
+  [:a {:href (str "#" timestamp) :name timestamp} hour-min])
+
 (defn index-handler
   ([request]
      (index-handler request nil))
   ([request conversation-oid]
-     (log/info "index-handler" conversation-oid)
      {:status 200
       :headers {"Content-Type" "text/html; charset=utf-8"}
       :body (html5
              [:head
-              [:title ""]
-              (include-css stylesheet)]
+              [:title ""]]
              [:body
+
               (for [[id data] @conversations]
-                [:div (:display-name data)
-                 (for [{:keys [author author-display-name
-                               timestamp message-body]} (:messages data)]
-                   [:div {:class "info"}
-                    (let [date-time (from-long (* 1000 timestamp))
-                          hour-min (unparse (formatters :hour-minute) date-time)]
-                      [:a {:href (str "#" timestamp) :name timestamp} hour-min])
-                    (escape-html (str "<" author-display-name ">")) message-body
-                    [:br]])])
+                [:div
+                 [:a {:href (str "/" (:oid data))} (:display-name data)]])
+
+              [:br]
+
+              ;; need date component
+
+              (when-let [data (get @conversations (keyword conversation-oid))]
+                (for [{:keys [author author-display-name
+                              timestamp message-body]} (:messages data)]
+                  (let [date-time (from-long (* 1000 timestamp))
+                        hour-min (unparse (formatters :hour-minute) date-time)]
+                    [:div
+                     (time-link timestamp hour-min)
+                     (escape-html author-display-name)
+                     message-body])))
+
               (javascript-tag "var CLOSURE_NO_DEPS = true;")
               (include-js "/js/main.js")
               (javascript-tag "skypeclj_client.core.init()")])}))
@@ -165,7 +175,7 @@
 (defn events-handler
   [response-channel request]
   (let [{{:keys [conversation-oid]} :route-params} request
-        _ (log/info "events-handler" conversation-oid)
+        ;; _ (log/info "events-handler" conversation-oid)
         event-channel (channel)]
     (register-event-listener event-channel nil)
     (enqueue response-channel
@@ -186,20 +196,21 @@
   (route/files "/" {:root "resources/public"})
   (route/not-found "Not Found"))
 
-(def app-routes-with-auth
+(defonce app-routes-with-auth
   (-> app-routes
       (friend/authenticate
        {:workflows [(openid/workflow :openid-uri "/openid"
                                      :realm "http://localhost:4000"
                                      :credential-fn identity)]})))
 
-(def app
+(defonce app
   (-> app-routes-with-auth
       wrap-bounce-favicon
       wrap-keyword-params
       wrap-nested-params
       wrap-params
-      wrap-session))
+      wrap-session
+      wrap-reload))
 
 (defn stop
   []
