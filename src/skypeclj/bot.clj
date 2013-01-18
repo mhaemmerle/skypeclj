@@ -3,18 +3,36 @@
             [clojure.string :as string]
             [skypeclj.skype :as skype]
             [skypeclj.config :as config]
-            [skypeclj.logger :as logger])
+            [skypeclj.logger :as logger]
+            [skypeclj.registry :as registry])
   (:import [com.skype.api Skype AccountListener Account$Status Account$Property
             Conversation Message]))
 
-;; get missing messages
-;; (let [conversation (skype/open-conversation skype "johann-bot")])
+(defonce bot (atom {:skype nil :commands nil}))
 
-(def ^:dynamic *skype* nil)
-
-(def bot-prefix "@helga")
-(def bot-name (:username config/config))
-(def commands (atom {}))
+(defn ^:private parse-message
+  [^Conversation conversation ^Message message]
+  (let [author (.getAuthor message)
+        message-body (.getBodyXml message)
+        maybe-prefix-and-rest (string/split message-body #" " 2)
+        bot-prefix (:prefix config/config)
+        bot-name (:username config/config)
+        lc (string/lower-case (first maybe-prefix-and-rest))]
+    (log/info "author" author "maybe-prefix-and-rest" maybe-prefix-and-rest
+              "prefix" bot-prefix "bot-name" bot-name)
+    (when (and (= bot-prefix lc)
+               (not= bot-name author))
+      (log/info "shit")
+      (let [the-rest (second maybe-prefix-and-rest)
+            without-bot-prefix (string/split the-rest #" ")
+            cmd-string (first without-bot-prefix)
+            cmd (keyword cmd-string)
+            args (rest without-bot-prefix)]
+        (log/info "cmd" cmd "registered?" (registry/registered? bot cmd))
+        (let [reply (if (registry/registered? bot cmd)
+                      (registry/handle bot cmd args)
+                      (str "I am very sorry, but I don't understand that request."))]
+              (skype/post-text conversation reply))))))
 
 (defn account-on-property-change
   [account property value string-value]
@@ -22,54 +40,11 @@
   (when (and (= Account$Property/P_STATUS property)
              (= (.getId Account$Status/LOGGED_IN) value))
     (log/info "We're logged in!")
-    (logger/init-conversations (skype/get-conversation-list *skype*))))
+    (logger/init-conversations (skype/get-conversation-list (:skype @bot)))))
 
 (defn message-on-property-change
   [message property value string-value]
   (log/info "message-on-property-change" property value))
-
-(defn register-command!
-  [cmd fun]
-  (swap! commands assoc cmd fun))
-
-(defn deregister-command!
-  [cmd]
-  (swap! commands dissoc cmd))
-
-(defn ^:private command?
-  [cmd]
-  (if (or (nil? cmd)
-          (nil? (cmd @commands)))
-    false true))
-
-(defn execute-command
-  [conversation cmd args]
-  (log/info "execute-command" cmd args)
-  (skype/post-text conversation (try
-                                  (apply (cmd @commands) args)
-                                  (catch Exception exception
-                                    (.getMessage exception)))))
-
-(defn ^:private parse-message
-  [^Conversation conversation ^Message message]
-  (let [author (.getAuthor message)
-        message-body (.getBodyXml message)
-        maybe-prefix-and-rest (clojure.string/split message-body #" " 2)]
-    (log/info "author" author "maybe-prefix-and-rest" maybe-prefix-and-rest)
-    (when (and (= bot-prefix (first maybe-prefix-and-rest))
-               (not= bot-name author))
-      (let [the-rest (second maybe-prefix-and-rest)
-            without-bot-prefix (clojure.string/split the-rest #" ")
-            cmd-string (first without-bot-prefix)
-            cmd (keyword cmd-string)
-            args (rest without-bot-prefix)]
-        (when (command? cmd)
-          (execute-command conversation cmd args))))))
-
-;; register plugins as commands?
-
-(register-command! :echo (fn [& args] (clojure.string/join " " args)))
-(register-command! :crash (fn [& args] (throw (Exception. "don't provoke me!"))))
 
 (defn skype-on-message
   [skype message changes-inbox-timestamp supersedes-history-message conversation]
@@ -78,7 +53,7 @@
   (logger/log-message conversation message)
   (parse-message conversation message))
 
-(defn register-bot-listeners
+(defn register-default-listeners
   []
   (skype/add-listener! :account-listener :on-property-change account-on-property-change)
   (skype/add-listener! :skype-listener :on-message skype-on-message)
@@ -86,13 +61,15 @@
 
 (defn stop
   []
-  (skype/stop *skype*))
+  (skype/stop (:skype @bot)))
 
 (defn start
+  "Entry point that initializes the bot and makes sure the connection to SkypeKit is up and running"
   [runtime-host runtime-port username password key]
-  (register-bot-listeners)
+  (register-default-listeners)
+  (registry/register-default-commands bot)
   (let [skype (skype/start key runtime-host runtime-port)
         account (skype/login skype username password)]
-    (alter-var-root #'*skype* (constantly skype))
+    (swap! bot assoc :skype skype)
     (log/info "account" account (.getSkypeName account))
     nil))

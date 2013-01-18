@@ -4,4 +4,5 @@
  :runtime {:host "127.0.0.1"
            :port 8963}
  :logger {:host "127.0.0.1"
-          :port 4000}}
+          :port 4000}
+ :prefix "helga"}

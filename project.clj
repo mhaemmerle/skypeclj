@@ -15,7 +15,12 @@
                  [clj-time "0.4.4"]
                  [org.clojure/tools.nrepl "0.2.0-RC2"]
                  [com.cemerick/friend "0.1.3"]
-                 [org.clojars.gmazelier/cron4j "2.2.5"]]
+                 [org.mozilla/rhino "1.7R4"]
+                 [commons-lang "2.6"]
+                 [evaljs "0.1.2"]
+                 [crate "0.2.4"]
+                 [jayq "2.0.0"]
+                 [snout "0.1.0"]]
   :dev-dependencies [[lein-checkouts "1.0.0"]]
   :plugins [[lein-marginalia "0.7.1"]
             [lein-cljsbuild "0.2.10"]]
@@ -23,5 +28,10 @@
                         :compiler {:output-to "resources/public/js/main.js"
                                    :optimizations :whitespace
                                    :pretty-print true}}]}
-  :jvm-opts ["-server"]
+  :jvm-opts ["-server"
+             "-Djava.awt.headless=true"
+             "-XX:+UseConcMarkSweepGC"
+             "-XX:+UseParNewGC"
+             "-Xms64m"
+             "-Xmx1g"]
   :main skypeclj.core)

@@ -17,28 +17,16 @@
             [clj-time.core :refer [now]]
             [cemerick.friend :as friend]
             [cemerick.friend.openid :as openid])
-  (:import [com.skype.api Conversation Message]
-           it.sauronsoftware.cron4j.Scheduler))
+  (:import [com.skype.api Conversation Message]))
 
 (set! *warn-on-reflection* true)
 
 (defonce aleph-stop (atom nil))
+(defonce message-channel (permanent-channel))
+
 (defonce conversations (atom {}))
 
 (def skype-logs-dir (clojure.java.io/file "skype-logs"))
-
-(defn rotate-logs
-  []
-  (log/info "rotate-logs"))
-
-(defn start-logrotate-scheduler
-  []
-  (log/info "start-logrotate-scheduler")
-  (doto (Scheduler.)
-    (.schedule "*/1 * * * *" rotate-logs)
-    (.start)))
-
-;; (start-logrotate-scheduler)
 
 ;; TODO implement
 (defn ^:private write-to-disk
@@ -54,6 +42,27 @@
   [timestamp]
   (unparse (formatters :date) (from-long (* timestamp 1000))))
 
+(defn create-distributor
+  []
+  (distributor :conv-id
+               (fn [facet facet-channel]
+                 (log/info "distributor" facet facet-channel (keyword? facet))
+                 (let [ch-name facet
+                       conv-channel (named-channel ch-name (fn [_]))]
+                   (log/info "distributor" ch-name conv-channel)
+                   (close-on-idle 5000 facet-channel)
+                   (close-on-idle 5000 conv-channel)
+                   (ground conv-channel)
+                   (siphon facet-channel conv-channel)))))
+
+(defn register-conv-listener
+  [conv-id]
+  (log/info "register-conv-listener" (keyword? conv-id))
+  (let [ch-name (keyword (str conv-id))
+        conv-channel (named-channel ch-name (fn [_]))]
+    (log/info "register-conv-listener" conv-id ch-name conv-channel)
+    (map* :msg (tap conv-channel))))
+
 ;; should ignore messages, that are not from today
 ;; and restore them later on
 (defn log-message
@@ -67,6 +76,18 @@
                         :author-display-name (.getAuthorDisplayName message)
                         :timestamp timestamp
                         :message-body (.getBodyXml message)}]
+
+    ;; TODO move somewhere else
+    ;; parent fun should be generic logger-handler and then just to dispatch
+    (let [date-time (from-long (* 1000 timestamp))
+          hour-min (unparse (formatters :hour-minute) date-time)
+          m {:guid nil
+             :author (escape-html (.getAuthorDisplayName message))
+             :timestamp timestamp
+             :hour-min hour-min
+             :message (.getBodyXml message)}]
+      (enqueue message-channel {:conv-id oid-keyword :msg m}))
+
     (swap! conversations update-in [oid-keyword :messages] conj tagged-message))
   nil)
 
@@ -87,7 +108,7 @@
   (doseq [^java.io.File f (filter #(not (.isDirectory ^java.io.File %)) (file-seq dir))]
     (log/info "list-logs" (.getName f))))
 
-;; (list-logs skype-logs-dir)
+(list-logs skype-logs-dir)
 
 ;; TODO check local conversation files
 ;; does directory exist?
@@ -143,45 +164,38 @@
               [:br]
 
               ;; need date component
-
               (when-let [data (get @conversations (keyword conversation-oid))]
-                (for [{:keys [author author-display-name
-                              timestamp message-body]} (:messages data)]
-                  (let [date-time (from-long (* 1000 timestamp))
-                        hour-min (unparse (formatters :hour-minute) date-time)]
-                    [:div
-                     (time-link timestamp hour-min)
-                     (escape-html author-display-name)
-                     message-body])))
+                [:div {:id "conv-container"}
+                 (for [{:keys [author author-display-name
+                               timestamp message-body]} (:messages data)]
+                   (let [date-time (from-long (* 1000 timestamp))
+                         hour-min (unparse (formatters :hour-minute) date-time)]
+                     [:div
+                      (time-link timestamp hour-min)
+                      (escape-html author-display-name)
+                      message-body]))])
 
               (javascript-tag "var CLOSURE_NO_DEPS = true;")
+              (include-js "//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js")
               (include-js "/js/main.js")
-              (javascript-tag "skypeclj_client.core.init()")])}))
+              (javascript-tag (str "skypeclj_client.core.init(" conversation-oid ")"))])}))
 
 (defn- encode-event-data
   [data]
   (str (format "data: %s\n\n" (generate-string data))))
 
-;; topics == oid's
-
-(defn register-event-listener
-  [event-channel topic]
-  )
-
-(defn deregister-event-listener
-  [event-channel]
-  )
-
+;; conversation id -> topic
 (defn events-handler
   [response-channel request]
-  (let [{{:keys [conversation-oid]} :route-params} request
-        ;; _ (log/info "events-handler" conversation-oid)
-        event-channel (channel)]
-    (register-event-listener event-channel nil)
-    (enqueue response-channel
-             {:status 200
-              :headers {"Content-Type" "text/event-stream"}
-              :body (map* encode-event-data event-channel)})))
+  (let [{:keys [route-params]} request]
+    (log/info "events-handler" route-params)
+    (when-let [id (:conversation route-params )]
+      (let [event-channel (register-conv-listener id)]
+        (on-closed event-channel #(log/info "user has left" id))
+        (enqueue response-channel
+                 {:status 200
+                  :headers {"Content-Type" "text/event-stream"}
+                  :body (map* encode-event-data event-channel)})))))
 
 (defroutes app-routes
   (GET "/" [] (friend/authenticated index-handler))
@@ -218,6 +232,8 @@
 
 (defn start
   [host port]
+  ;; routes incoming skype messages to listening web clients
+  (siphon message-channel (create-distributor))
   (let [wrapped-handler (wrap-ring-handler app)
         stop-fn (start-http-server wrapped-handler {:port port})]
     (reset! aleph-stop stop-fn)
