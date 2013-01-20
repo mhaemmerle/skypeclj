@@ -3,6 +3,7 @@
 A simple Clojure wrapper for the Skype Java API
 
 Use it in your project with:
+
     [skypeclj "0.1.0-SNAPSHOT"]
 
 ## Requirements
