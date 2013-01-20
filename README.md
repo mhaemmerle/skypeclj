@@ -49,7 +49,6 @@ $ openssl pkcs8 -topk8 -in my-skype-key.pem -outform DER -out my-skype-key.der -
 
 Have a normal Skype account with credentials ready.
 
-
 ## Usage
 
 The runtime will stop every time you disconnect your client, so running in a loop can save you some time on each development cycle, as it will be restarted once control returns:
@@ -65,6 +64,9 @@ $ lein deps
 $ lein trampoline run
 ```
 
+## Notice
+
+The plugin registry was taken from the awesome [lazybot](http://github.com/flatland/) project more or less as-is.
 
 ## License
 

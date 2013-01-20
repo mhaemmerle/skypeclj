@@ -28,16 +28,6 @@
 
 (def skype-logs-dir (clojure.java.io/file "skype-logs"))
 
-;; TODO implement
-(defn ^:private write-to-disk
-  [conversation date filename]
-  (log/info "write-to-disk" conversation date filename))
-
-;; TODO implement
-(defn ^:private load-from-disk
-  [conversation date filename]
-  (log/info "load-from-disk" conversation date filename))
-
 (defn timestamp-to-date
   [timestamp]
   (unparse (formatters :date) (from-long (* timestamp 1000))))
@@ -102,13 +92,6 @@
               "unconsumed-messages" (count unconsumed-messages))
     (doseq [message unconsumed-messages]
       (log-message conversation message))))
-
-(defn list-logs
-  [dir]
-  (doseq [^java.io.File f (filter #(not (.isDirectory ^java.io.File %)) (file-seq dir))]
-    (log/info "list-logs" (.getName f))))
-
-(list-logs skype-logs-dir)
 
 ;; TODO check local conversation files
 ;; does directory exist?

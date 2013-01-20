@@ -8,7 +8,7 @@
   (:import [com.skype.api Skype AccountListener Account$Status Account$Property
             Conversation Message]))
 
-(defonce bot (atom {:skype nil :commands nil}))
+(defonce bot (atom {:skype nil}))
 
 (defn ^:private parse-message
   [^Conversation conversation ^Message message]
@@ -25,14 +25,14 @@
       (log/info "shit")
       (let [the-rest (second maybe-prefix-and-rest)
             without-bot-prefix (string/split the-rest #" ")
-            cmd-string (first without-bot-prefix)
-            cmd (keyword cmd-string)
+            cmd (first without-bot-prefix)
             args (rest without-bot-prefix)]
-        (log/info "cmd" cmd "registered?" (registry/registered? bot cmd))
-        (let [reply (if (registry/registered? bot cmd)
-                      (registry/handle bot cmd args)
+        (log/info "cmd" cmd "args" args)
+        (let [reply (if-let [cmd-fn (:fn (registry/find-command bot #{cmd}))]
+                      (registry/handle bot cmd-fn args)
                       (str "I am very sorry, but I don't understand that request."))]
-              (skype/post-text conversation reply))))))
+          (log/info "reply" reply)
+          (skype/post-text conversation reply))))))
 
 (defn account-on-property-change
   [account property value string-value]
@@ -48,6 +48,7 @@
 
 (defn skype-on-message
   [skype message changes-inbox-timestamp supersedes-history-message conversation]
+  (log/info "skype-on-message - thread name:" (.getName (Thread/currentThread)))
   (log/info "skype-on-message" message (.getTimestamp message) changes-inbox-timestamp
             supersedes-history-message)
   (logger/log-message conversation message)
@@ -64,12 +65,27 @@
   (skype/stop (:skype @bot)))
 
 (defn start
-  "Entry point that initializes the bot and makes sure the connection to SkypeKit is up and running"
   [runtime-host runtime-port username password key]
   (register-default-listeners)
-  (registry/register-default-commands bot)
+
+  (registry/load-plugin bot "pastebin")
+  (registry/load-plugin bot "random-quote")
+  (registry/load-plugin bot "aww")
+  (registry/load-plugin bot "echo")
+
   (let [skype (skype/start key runtime-host runtime-port)
         account (skype/login skype username password)]
     (swap! bot assoc :skype skype)
     (log/info "account" account (.getSkypeName account))
     nil))
+
+;; (defn list-all-commands
+;;   [bot]
+;;   (let [r (reduce (fn [b [k v]]
+;;                     (.append b (str (name k) "\n")))
+;;                   (StringBuffer.)
+;;                   (:commands @bot))]
+;;     (.toString r)))
+
+;; (register bot :crash (fn [& args] (throw (Exception. "don't provoke me!"))))
+;; (register bot :lq (fn [& args] (list-all-commands bot)))

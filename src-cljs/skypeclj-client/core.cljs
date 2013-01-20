@@ -38,7 +38,8 @@
 
 (defn ^:export init
   [id]
-  (doto (js/EventSource. (str "http://localhost:4000/" id "/events"))
-    (.addEventListener "open" on-open)
-    (.addEventListener "message" on-message)
-    (.addEventListener "error" on-error)))
+  (when (not (nil? id))
+    (doto (js/EventSource. (str "http://localhost:4000/" id "/events"))
+      (.addEventListener "open" on-open)
+      (.addEventListener "message" on-message)
+      (.addEventListener "error" on-error))))
