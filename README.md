@@ -2,8 +2,6 @@
 
 A simple Clojure wrapper for the Skype Java API
 
-Note: The wrapper is currently conflated with a bot/logger and will be spun out eventually to a standalong project so you can have the wrapper without any of the other potentially unnecessary stuff.
-
 ## Requirements
 
 This [guide](http://dow.ngra.de/2012/01/06/skype-bot-for-fun-and-profit-part-i-getting-started) by Toomas Römer will get you started.
@@ -57,16 +55,12 @@ The runtime will stop every time you disconnect your client, so running in a loo
 $ while :; do ./mac-x86-skypekit-novideo; sleep 1; done
 ```
 
-Edit `resources/config.clj` and fill in Skype username, password and the path to the converted key file.
+Pass the start function Skype username, password and the path to the converted key file.
 
 ```
 $ lein deps
 $ lein trampoline run
 ```
-
-## Notice
-
-The plugin registry was taken from the awesome [lazybot](http://github.com/flatland/) project more or less as-is.
 
 ## License
 
