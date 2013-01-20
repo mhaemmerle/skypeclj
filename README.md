@@ -2,6 +2,9 @@
 
 A simple Clojure wrapper for the Skype Java API
 
+Use it in your project with:
+    [skypeclj "0.1.0-SNAPSHOT"]
+
 ## Requirements
 
 This [guide](http://dow.ngra.de/2012/01/06/skype-bot-for-fun-and-profit-part-i-getting-started) by Toomas Römer will get you started.
